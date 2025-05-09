@@ -1,21 +1,29 @@
-# Reset-Autopilot.ps1
-# Kjøres fra WinPE
-
 wpeinit
 Start-Sleep -Seconds 2
 
-Write-Host "`n=== Startet Autopilot Reset ==="
+Write-Host ""
+Write-Host "=== Starter Autopilot Reset ==="
 
-# Disk wipe (GPT og EFI-basert)
+# Sjekk om install.wim finnes
+$WindowsSource = "X:\Sources\install.wim"
+$Index = 1
+
+if (-not (Test-Path $WindowsSource)) {
+    Write-Host "Fant ikke $WindowsSource. Avbryter."
+    Start-Sleep -Seconds 10
+    exit 1
+}
+
+# Diskpart-script
 $diskScript = @"
 select disk 0
 clean
 convert gpt
 create partition efi size=100
-format quick fs=fat32 label="System"
+format quick fs=fat32 label=System
 assign letter=S
 create partition primary
-format quick fs=ntfs label="Windows"
+format quick fs=ntfs label=Windows
 assign letter=W
 exit
 "@
@@ -24,16 +32,15 @@ Write-Host "Wiper og konfigurerer disk..."
 $diskScript | Out-File -Encoding ASCII X:\diskpart.txt
 diskpart /s X:\diskpart.txt
 
-# Pek til Windows install.wim eller ISO (tilpass hvis ISO brukes)
-$WindowsSource = "X:\Sources\install.wim"  # eller X:\install.wim fra USB eller nettverk
-$Index = 1
+# Installer Windows
+Write-Host "Installerer Windows 11..."
+Start-Process dism.exe -ArgumentList "/Apply-Image","/ImageFile:$WindowsSource","/Index:$Index","/ApplyDir:W:\" -Wait
 
-Write-Host "Installerer Windows 11 generisk..."
-Dism /Apply-Image /ImageFile:$WindowsSource /Index:$Index /ApplyDir:W:\
-
+# BCD
 Write-Host "Konfigurerer BCD..."
 bcdboot W:\Windows /s S: /f UEFI
 
-Write-Host "`n=== Ferdig. Starter Windows for OOBE og Autopilot...`n"
-Start-Sleep -Seconds 3
+Write-Host ""
+Write-Host "Fullfort. Starter Windows..."
+Start-Sleep -Seconds 5
 wpeutil reboot
